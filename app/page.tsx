@@ -1,103 +1,134 @@
-import Image from "next/image";
+﻿"use client";
+import { useEffect, useState } from "react";
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer, BarChart, Bar
+} from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+
+type Daily = { day: string; kcal: number; prot: number; fat: number; carb: number };
+type Agg = { period?: string; kcal?: number; prot?: number; fat?: number; carb?: number };
+type Stats = { ok: boolean; days7: Daily[]; days30: Daily[]; agg7?: Agg; agg30?: Agg; };
+
+declare global {
+  interface TelegramWebApp { initData: string; expand: () => void }
+  interface TelegramNamespace { WebApp?: TelegramWebApp }
+  interface Window { Telegram?: TelegramNamespace }
+}
+
+function useTelegramInit() {
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    const tg = window?.Telegram?.WebApp;
+    if (!tg) return;                    // если не в Telegram — остаёмся неавторизованы
+    tg.expand();
+    const initData = tg.initData || "";
+    fetch("/api/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData }),
+    })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean }) => setOk(!!j?.ok))
+      .catch(() => setOk(false));
+  }, []);
+  return ok;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const authed = useTelegramInit();
+  const [range, setRange] = useState<"7" | "30">("7");
+  const [data, setData] = useState<Stats | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+  useEffect(() => {
+    if (!authed) return;
+    fetch("/api/stats").then((r) => r.json()).then((j: Stats) => setData(j));
+  }, [authed]);
+
+  const days: Daily[] = (range === "7" ? data?.days7 : data?.days30) ?? [];
+  const agg: Agg | undefined = range === "7" ? data?.agg7 : data?.agg30;
+
+  return (
+    <main className="mx-auto w-full max-w-screen-sm px-4 py-5">
+      <div className="mb-3 text-center">
+        <h1 className="text-2xl font-bold tracking-tight">📊 Статистика</h1>
+        <p className="text-sm text-neutral-400">калории и Б/Ж/У по дням</p>
+      </div>
+
+      {/* вкладки диапазона */}
+      <Tabs value={range} className="mb-3" onValueChange={(v) => setRange(v as "7" | "30")}>
+        <TabsList className="grid w-full grid-cols-2 bg-neutral-800">
+          <TabsTrigger value="7">7 дней</TabsTrigger>
+          <TabsTrigger value="30">30 дней</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* график 1 */}
+      <Card className="mb-3 border-neutral-800 bg-neutral-900/60 backdrop-blur">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-neutral-300">Калории по дням</CardTitle>
+        </CardHeader>
+        <CardContent className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={days} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <defs>
+                <linearGradient id="kcal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopOpacity={0.9} />
+                  <stop offset="95%" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="day" tick={{ fontSize: 12, fill: "#a3a3a3" }} />
+              <YAxis tick={{ fontSize: 12, fill: "#a3a3a3" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+              <Tooltip />
+              <Area type="monotone" dataKey="kcal" stroke="#7c7cff" fill="url(#kcal)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* график 2 */}
+      <Card className="mb-3 border-neutral-800 bg-neutral-900/60 backdrop-blur">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-neutral-300">Б/Ж/У по дням</CardTitle>
+        </CardHeader>
+        <CardContent className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={days} margin={{ left: -16 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+              <XAxis dataKey="day" tick={{ fontSize: 12, fill: "#a3a3a3" }} />
+              <YAxis tick={{ fontSize: 12, fill: "#a3a3a3" }} />
+              <Tooltip />
+              <Bar dataKey="prot" stackId="a" />
+              <Bar dataKey="fat" stackId="a" />
+              <Bar dataKey="carb" stackId="a" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* суммарные карточки */}
+      <Card className="border-neutral-800 bg-neutral-900/60 backdrop-blur">
+        <CardHeader className="pb-0">
+          <CardTitle className="text-sm text-neutral-300">Итоги за период</CardTitle>
+        </CardHeader>
+        <CardContent className="py-3">
+          <div className="grid grid-cols-4 gap-2">
+            {(["kcal", "prot", "fat", "carb"] as const).map((k) => (
+              <div key={k} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3 text-center">
+                <div className="text-[10px] uppercase text-neutral-400">{k}</div>
+                <div className="text-lg font-semibold">{agg?.[k] ?? 0}</div>
+              </div>
+            ))}
+          </div>
+          <Separator className="my-3 bg-neutral-800" />
+          <p className="text-xs text-neutral-400">
+            Данные формируются по `v_daily_totals` (Supabase). Диапазон: {range} дней.
+          </p>
+        </CardContent>
+      </Card>
+    </main>
   );
 }

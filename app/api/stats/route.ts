@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from 'next/server';
-import { supaSrv } from '@/lib/supabase';
+import { getSupa } from '@/lib/supabase';
 import { getChatIdFromCookie } from '@/lib/getChatId';
 
 type Daily = { day: string; kcal: number; prot: number; fat: number; carb: number };
@@ -9,21 +9,23 @@ export async function GET() {
   const chatId = await getChatIdFromCookie();
   if (!chatId) return NextResponse.json({ ok: false, error: 'no auth' }, { status: 401 });
 
+  const supa = getSupa();
+
   const d7 = new Date(Date.now() - 6 * 86400000).toISOString().slice(0,10);
   const d30 = new Date(Date.now() - 29 * 86400000).toISOString().slice(0,10);
 
-  const { data: days7 } = await supaSrv
+  const { data: days7 } = await supa
     .from('v_daily_totals').select('*')
     .eq('chat_id', chatId).gte('day', d7)
     .order('day', { ascending: true });
 
-  const { data: days30 } = await supaSrv
+  const { data: days30 } = await supa
     .from('v_daily_totals').select('*')
     .eq('chat_id', chatId).gte('day', d30)
     .order('day', { ascending: true });
 
-  const { data: agg7 } = await supaSrv.rpc('f_totals_since', { chat: chatId, days: 7 });
-  const { data: agg30 } = await supaSrv.rpc('f_totals_since', { chat: chatId, days: 30 });
+  const { data: agg7 } = await supa.rpc('f_totals_since', { chat: chatId, days: 7 });
+  const { data: agg30 } = await supa.rpc('f_totals_since', { chat: chatId, days: 30 });
 
   return NextResponse.json({
     ok: true,

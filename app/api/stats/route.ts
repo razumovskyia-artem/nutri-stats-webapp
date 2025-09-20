@@ -6,7 +6,7 @@ type Daily = { day: string; kcal: number; prot: number; fat: number; carb: numbe
 type Agg = { period?: string; kcal?: number; prot?: number; fat?: number; carb?: number };
 
 export async function GET() {
-  const chatId = getChatIdFromCookie();
+  const chatId = await getChatIdFromCookie();
   if (!chatId) return NextResponse.json({ ok: false, error: 'no auth' }, { status: 401 });
 
   const d7 = new Date(Date.now() - 6 * 86400000).toISOString().slice(0,10);
